@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>PTC Checklist Manager</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 40px;
+      background: #f0f0f0;
+    }
+    h1, h2 {
+      color: #333;
+    }
+    .section {
+      margin-bottom: 30px;
+      padding: 20px;
+      background: #fff;
+      border-radius: 10px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    label {
+      display: block;
+      margin: 10px 0;
+    }
+    input[type="checkbox"] {
+      margin-right: 10px;
+      transform: scale(1.2);
+    }
+    input[type="text"] {
+      padding: 8px;
+      font-size: 16px;
+      width: 250px;
+    }
+    button {
+      padding: 6px 10px;
+      margin-left: 5px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    #fileList {
+      margin-top: 20px;
+    }
+    .file-group {
+      margin-bottom: 20px;
+    }
+    .file-entry {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #f9f9f9;
+      padding: 6px 10px;
+      margin: 3px 0;
+      border-radius: 6px;
+    }
+    .file-entry span {
+      flex-grow: 1;
+      cursor: pointer;
+      color: #007BFF;
+    }
+    .file-entry span:hover {
+      color: #0056b3;
+    }
+    #currentCustomer {
+      font-weight: bold;
+      color: #006400;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>PTC Vehicle Entry Checklist</h1>
+
+  <div class="section">
+    <label>
+      Enter Customer Name:
+      <input type="text" id="customerInput" placeholder="e.g., Jane Doe">
+      <button id="loadBtn">Load</button>
+      <button id="saveCloseBtn" style="display:none;">Save & Close</button>
+    </label>
+    <div id="currentCustomer"></div>
+  </div>
+
+  <div id="checklist" class="section" style="display:none;">
+    <h2>Pre-entry Checklist</h2>
+    <label><input type="checkbox"> Estimate in system/insurance estimate acquired</label>
+    <label><input type="checkbox"> Add to car list</label>
+    <label><input type="checkbox"> Call customer to verify appointment and confirm email</label>
+    <label><input type="checkbox"> Send intake sheet, D2P, and A2R via email</label>
+    <label><input type="checkbox"> Make file folder</label>
+    <label><input type="checkbox"> Parts ordered</label>
+    <label><input type="checkbox"> Print parts list + put in folder</label>
+    <label><input type="checkbox"> Lock estimate</label>
+    <label><input type="checkbox"> Add to shop board</label>
+
+    <h2>Entry Checklist</h2>
+    <label><input type="checkbox"> Check status of parts with list</label>
+    <label><input type="checkbox"> Tag car keys</label>
+    <label><input type="checkbox"> Intake pictures</label>
+    <label><input type="checkbox"> Run diagnostic scan and file it</label>
+    <label><input type="checkbox"> Assign job to tech with printed work orders</label>
+    <label><input type="checkbox"> Bring car inside gate</label>
+    <label><input type="checkbox"> Ask if insurance check has been received</label>
+    <label><input type="checkbox"> Update status on car list</label>
+  </div>
+
+  <div class="section">
+    <h2>Saved Checklists</h2>
+    <div id="fileList"></div>
+  </div>
+
+  <script>
+    const checklist = document.getElementById('checklist');
+    const input = document.getElementById('customerInput');
+    const loadBtn = document.getElementById('loadBtn');
+    const saveCloseBtn = document.getElementById('saveCloseBtn');
+    const fileList = document.getElementById('fileList');
+    const currentCustomerDisplay = document.getElementById('currentCustomer');
+    let currentName = '';
+
+    function getRelativeDateLabel(dateString) {
+      const today = new Date();
+      const savedDate = new Date(dateString);
+      const diff = Math.floor((today - savedDate) / (1000 * 60 * 60 * 24));
+      if (diff === 0) return "Today";
+      if (diff === 1) return "Yesterday";
+      return savedDate.toLocaleDateString();
+    }
+
+    function updateFileList() {
+      fileList.innerHTML = '';
+      const groups = {};
+
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith('ptc_') && !key.endsWith('_date')) {
+          const name = key.replace('ptc_', '');
+          const dateKey = `ptc_${name}_date`;
+          const savedDate = localStorage.getItem(dateKey) || new Date().toISOString();
+          const label = getRelativeDateLabel(savedDate);
+
+          if (!groups[label]) groups[label] = [];
+          groups[label].push({ name, savedDate });
+        }
+      });
+
+      const sortedDates = Object.keys(groups).sort((a, b) => {
+        const aDate = new Date(groups[a][0].savedDate);
+        const bDate = new Date(groups[b][0].savedDate);
+        return bDate - aDate;
+      });
+
+      sortedDates.forEach(label => {
+        const group = document.createElement('div');
+        group.className = 'file-group';
+        const header = document.createElement('h3');
+        header.textContent = label;
+        group.appendChild(header);
+
+        groups[label].forEach(entry => {
+          const div = document.createElement('div');
+          div.className = 'file-entry';
+
+          const span = document.createElement('span');
+          span.textContent = entry.name;
+          span.onclick = () => {
+            input.value = entry.name;
+            loadChecklist(entry.name);
+          };
+
+          const deleteBtn = document.createElement('button');
+          deleteBtn.textContent = '🗑️';
+          deleteBtn.title = 'Delete';
+          deleteBtn.onclick = () => {
+            localStorage.removeItem("ptc_" + entry.name);
+            localStorage.removeItem("ptc_" + entry.name + "_date");
+            updateFileList();
+          };
+
+          div.appendChild(span);
+          div.appendChild(deleteBtn);
+          group.appendChild(div);
+        });
+
+        fileList.appendChild(group);
+      });
+    }
+
+    function loadChecklist(name) {
+      checklist.style.display = 'block';
+      saveCloseBtn.style.display = 'inline-block';
+      currentName = name.toLowerCase().trim();
+      currentCustomerDisplay.textContent = `Currently Loaded: ${name}`;
+
+      const checkboxes = checklist.querySelectorAll('input[type="checkbox"]');
+      const saved = JSON.parse(localStorage.getItem("ptc_" + currentName)) || [];
+
+      checkboxes.forEach((box, index) => {
+        box.checked = saved[index] || false;
+        box.onchange = () => saveChecklist(currentName);
+      });
+    }
+
+    function saveChecklist(name) {
+      const checkboxes = checklist.querySelectorAll('input[type="checkbox"]');
+      const state = Array.from(checkboxes).map(cb => cb.checked);
+      localStorage.setItem("ptc_" + name, JSON.stringify(state));
+
+      const dateKey = "ptc_" + name + "_date";
+      if (!localStorage.getItem(dateKey)) {
+        localStorage.setItem(dateKey, new Date().toISOString());
+      }
+
+      updateFileList();
+    }
+
+    function closeChecklist() {
+      checklist.style.display = 'none';
+      saveCloseBtn.style.display = 'none';
+      currentCustomerDisplay.textContent = '';
+      input.value = '';
+      currentName = '';
+    }
+
+    loadBtn.addEventListener('click', () => {
+      const name = input.value.trim().toLowerCase();
+      if (name) loadChecklist(name);
+    });
+
+    saveCloseBtn.addEventListener('click', () => {
+      if (currentName) saveChecklist(currentName);
+      closeChecklist();
+    });
+
+    updateFileList();
+  </script>
+
+</body>
+</html>
